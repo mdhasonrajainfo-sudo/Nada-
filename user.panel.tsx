@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, Bell, Headphones, Home, Wallet, Users, User, LogOut, 
@@ -11,7 +10,7 @@ import {
   Ticket, ExternalLink, Loader2, CreditCard, Gift, Trophy, Globe,
   MessageCircle, LayoutGrid, Star, AlertTriangle, Play, XCircle,
   ShoppingBag, CheckSquare, Zap, Gift as GiftIcon, Clock, Calendar,
-  Map, Milestone, Info
+  Map, Milestone, Info, Mail
 } from 'lucide-react';
 import { UserData, DB_KEYS } from './types';
 import { supabase } from './supabaseClient';
@@ -408,36 +407,72 @@ const AccountSellPage = ({ user, onBack, showPopup, onGoPremium }: any) => {
 
   const renderGmailRequestCard = (trx: Transaction) => {
     const data = JSON.parse(trx.details || '{}');
+    const isCredentialsAvailable = data.adminEmail && data.adminPass;
+
     return (
-        <div key={trx.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-3">
-            <div className="flex justify-between mb-2">
-                 <span className="font-bold text-sm text-indigo-700">Gmail Request #{trx.id.slice(-4)}</span>
-                 <span className="text-[10px] bg-gray-100 px-2 py-1 rounded font-bold uppercase">{trx.status.replace('_', ' ')}</span>
+        <div key={trx.id} className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm mb-3">
+            <div className="flex justify-between items-center mb-3 pb-2 border-b border-indigo-50">
+                 <span className="font-bold text-sm text-indigo-700 flex items-center gap-2">
+                    <Mail size={16}/> Gmail Request
+                 </span>
+                 <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase ${
+                     trx.status === 'approved' ? 'bg-green-100 text-green-700' :
+                     trx.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                     'bg-yellow-100 text-yellow-700'
+                 }`}>{trx.status.replace('_', ' ')}</span>
             </div>
-            {trx.status === 'pending_creds' && <p className="text-xs text-gray-500">অ্যাডমিন ক্রেডেনশিয়াল পাঠানোর জন্য অপেক্ষা করুন...</p>}
-            {trx.status === 'working' && (
-                <div className="space-y-3">
-                    <div className="bg-gray-50 p-3 rounded text-xs border">
-                        <p><strong>Name:</strong> {data.firstName} {data.lastName}</p>
-                        <p><strong>Email:</strong> {data.adminEmail}</p>
-                        <p><strong>Pass:</strong> {data.adminPass}</p>
+
+            {/* Credentials Display Block */}
+            {isCredentialsAvailable && (
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500 font-medium">Email:</span>
+                        <span className="text-xs font-bold text-gray-800 font-mono select-all">{data.adminEmail}</span>
                     </div>
-                    <p className="text-xs text-red-500">নির্দেশনা: উপরের তথ্য দিয়ে জিমেইল খুলুন। তারপর নিচে ক্লিক করুন।</p>
-                    <button onClick={() => updateGmailRequest(trx, {}, 'pending_recovery', 'অ্যাডমিনকে রিকভারি ইমেইল দিতে বলা হয়েছে।')} className="w-full bg-blue-600 text-white py-2 rounded-lg text-xs font-bold">Submit Recovery Request</button>
+                    <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500 font-medium">Password:</span>
+                        <span className="text-xs font-bold text-gray-800 font-mono select-all">{data.adminPass}</span>
+                    </div>
+                    {data.adminRecovery && (
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                            <span className="text-xs text-gray-500 font-medium">Recovery:</span>
+                            <span className="text-xs font-bold text-indigo-600 font-mono select-all">{data.adminRecovery}</span>
+                        </div>
+                    )}
                 </div>
             )}
-            {trx.status === 'pending_recovery' && <p className="text-xs text-gray-500">অ্যাডমিন রিকভারি ইমেইল পাঠানোর জন্য অপেক্ষা করুন...</p>}
+
+            {/* Actions based on status */}
+            {trx.status === 'pending_creds' && <p className="text-xs text-gray-500 italic">অ্যাডমিন ক্রেডেনশিয়াল পাঠানোর জন্য অপেক্ষা করুন...</p>}
+            
+            {trx.status === 'working' && (
+                <div className="space-y-2">
+                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                        নির্দেশনা: উপরের ইমেইল ও পাসওয়ার্ড দিয়ে জিমেইল খুলুন। তারপর নিচে ক্লিক করে রিকভারি ইমেইল চান।
+                    </p>
+                    <button onClick={() => updateGmailRequest(trx, {}, 'pending_recovery', 'রিকভারি ইমেইল রিকুয়েস্ট পাঠানো হয়েছে।')} className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-xs font-bold shadow-md hover:bg-blue-700">
+                        Request Recovery Email
+                    </button>
+                </div>
+            )}
+
+            {trx.status === 'pending_recovery' && <p className="text-xs text-blue-500 italic">অ্যাডমিন রিকভারি ইমেইল দিচ্ছে, অপেক্ষা করুন...</p>}
+
             {trx.status === 'finalizing' && (
-                <div className="space-y-3">
-                     <div className="bg-green-50 p-3 rounded text-xs border border-green-200">
-                        <p><strong>Recovery Email:</strong> {data.adminRecovery}</p>
-                     </div>
-                     <p className="text-xs text-red-500">নির্দেশনা: এই রিকভারি ইমেইলটি সেট করুন এবং কাজ শেষ করুন।</p>
-                     <button onClick={() => updateGmailRequest(trx, {}, 'review', 'কাজ জমা দেওয়া হয়েছে! রিভিউ এর পর টাকা পাবেন।')} className="w-full bg-emerald-600 text-white py-2 rounded-lg text-xs font-bold">Task Completed</button>
+                <div className="space-y-2">
+                     <p className="text-xs text-emerald-600 bg-emerald-50 p-2 rounded">
+                        নির্দেশনা: রিকভারি ইমেইলটি জিমেইলে এড করুন এবং 'Done' ক্লিক করুন।
+                     </p>
+                     <button onClick={() => updateGmailRequest(trx, {}, 'review', 'কাজ জমা দেওয়া হয়েছে!')} className="w-full bg-emerald-600 text-white py-2.5 rounded-lg text-xs font-bold shadow-md hover:bg-emerald-700">
+                        Task Completed
+                     </button>
                 </div>
             )}
-            {trx.status === 'review' && <p className="text-xs text-emerald-600 font-bold">কাজ জমা হয়েছে! পেমেন্ট এর জন্য অপেক্ষা করুন।</p>}
+
+            {trx.status === 'review' && <p className="text-xs text-gray-500">অ্যাডমিন চেক করছে...</p>}
             {trx.status === 'approved' && <p className="text-xs text-emerald-600 font-bold">পেমেন্ট সম্পন্ন হয়েছে! ৳{trx.amount}</p>}
+            
+            <div className="mt-2 text-[10px] text-gray-400 text-right">ID: {trx.id}</div>
         </div>
     )
   };
@@ -1650,16 +1685,32 @@ const SupportPage = ({ onBack }: { onBack: () => void }) => {
     );
 };
 
-const DhamakaPage = ({ onBack }: { onBack: () => void }) => (
-    <div className={PAGE_CONTAINER_STYLE}>
-        <Header title="Dhamaka Offer" onBack={onBack} />
-        <div className="p-6 text-center text-gray-500 mt-10">
-            <GiftIcon size={48} className="mx-auto mb-4 text-purple-300"/>
-            <h3 className="text-lg font-bold text-gray-700 mb-2">Special Offers</h3>
-            <p className="text-sm">Exciting offers coming soon for Ramadan 2026!</p>
+const DhamakaPage = ({ onBack, settings }: { onBack: () => void, settings: any }) => {
+    const promo = settings?.promo || { title: 'No Offer', desc: 'Check back later', link: '' };
+    
+    return (
+        <div className={PAGE_CONTAINER_STYLE}>
+            <Header title="স্পেশাল অফার" onBack={onBack} />
+            <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
+                <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mb-6 animate-pulse">
+                    <GiftIcon size={48} className="text-purple-600"/>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-3">{promo.title}</h2>
+                <p className="text-gray-500 mb-8 whitespace-pre-line leading-relaxed max-w-xs mx-auto">
+                    {promo.desc}
+                </p>
+                {promo.link && (
+                    <button 
+                        onClick={() => window.open(promo.link, '_blank')} 
+                        className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-3 rounded-xl font-bold shadow-xl hover:scale-105 transition flex items-center gap-2"
+                    >
+                        <ExternalLink size={20}/> অফারটি দেখুন
+                    </button>
+                )}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 // --- User Panel (Main Export) ---
 export const UserPanel = ({ user, onLogout, onUpdateUser }: any) => {
@@ -1855,7 +1906,7 @@ export const UserPanel = ({ user, onLogout, onUpdateUser }: any) => {
             case 'profile': return <ProfilePage user={user} onBack={() => setCurrentView('dashboard')} onLogout={onLogout} onUpdateUser={onUpdateUser} showPopup={showPopup} />;
             case 'notifications': return <NotificationPage user={user} onBack={() => setCurrentView('dashboard')} />;
             case 'support': return <SupportPage onBack={() => setCurrentView('dashboard')} />;
-            case 'dhamaka': return <DhamakaPage onBack={() => setCurrentView('dashboard')} />;
+            case 'dhamaka': return <DhamakaPage onBack={() => setCurrentView('dashboard')} settings={settings} />;
             default: return <Dashboard />;
         }
     };
