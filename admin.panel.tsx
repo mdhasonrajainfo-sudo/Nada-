@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Menu, LayoutDashboard, Users, Crown, ClipboardList, 
@@ -7,7 +8,7 @@ import {
   ToggleRight, AlertTriangle, Link, Eye, CreditCard,
   Send, Keyboard, HelpCircle, Briefcase, ChevronRight,
   TrendingUp, Shield, Lock, FileText, BarChart3, Wallet,
-  Wand2, Gift, MessageSquare
+  Wand2, Gift, MessageSquare, Mail, Facebook, Instagram, Video
 } from 'lucide-react';
 import { UserData, DB_KEYS, AccountType } from './types';
 import { supabase } from './supabaseClient';
@@ -37,6 +38,16 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
   const [quizPackages, setQuizPackages] = useState<any[]>([]);
   const [salaryPlans, setSalaryPlans] = useState<any[]>([]);
   
+  // Sidebar Notification Counts
+  const [counts, setCounts] = useState({
+      deposit: 0,
+      withdraw: 0,
+      premium: 0,
+      task: 0,
+      gmail: 0,
+      social: 0
+  });
+  
   // Refresh Data
   const refreshData = async () => {
       const { data: userData } = await supabase.from('users').select('*');
@@ -63,9 +74,12 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
       const { data: settingData } = await supabase.from('settings').select('*').single();
       const existingSettings = settingData ? settingData.value : null;
 
-      setSettings(existingSettings ? existingSettings : {
+      const defaultSettings = {
           appName: 'Next Level Earn',
           supportLink: 'https://t.me/support',
+          groupLink: 'https://t.me/group',
+          channelLink: 'https://t.me/channel',
+          youtubeLink: 'https://youtube.com',
           bkash: '01700000000', 
           nagad: '01800000000',
           minWithdraw: 100,
@@ -83,8 +97,28 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
           socialRates: { gmail: 10, facebook: 5, instagram: 5, tiktok: 5 },
           socialDesc: { gmail: '', facebook: '', instagram: '', tiktok: '' },
           promo: { title: 'ধামাকা অফার ২০২৬', desc: 'বিস্তারিত আসছে...', link: '' },
-          sliderImages: []
-      });
+          sliderImages: [
+            "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&auto=format&fit=crop&q=60",
+            "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=800&auto=format&fit=crop&q=60",
+            "https://images.unsplash.com/photo-1628157588553-5eeea00af15c?w=800&auto=format&fit=crop&q=60",
+            "https://images.unsplash.com/photo-1556742049-0cfed4f7a07d?w=800&auto=format&fit=crop&q=60"
+          ],
+          marqueeText: 'Welcome to Next Level Earn'
+      };
+
+      setSettings(existingSettings ? { ...defaultSettings, ...existingSettings } : defaultSettings);
+
+      // Update Counts
+      if (trxData) {
+          setCounts({
+              deposit: trxData.filter(t => t.type === 'deposit' && t.status === 'pending').length,
+              withdraw: trxData.filter(t => t.type === 'withdraw' && t.status === 'pending').length,
+              premium: trxData.filter(t => t.type === 'purchase' && t.status === 'pending').length,
+              task: trxData.filter(t => t.category === 'task' && t.status === 'pending').length,
+              gmail: trxData.filter(t => t.category === 'gmail_request' && (t.status === 'pending_creds' || t.status === 'pending_recovery' || t.status === 'review')).length,
+              social: trxData.filter(t => t.category === 'sell' && t.status === 'pending').length
+          });
+      }
   };
 
   useEffect(() => {
@@ -99,7 +133,7 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
       } else {
           await supabase.from('settings').insert([{ value: newSettings }]);
       }
-      alert("Configuration Saved Successfully!");
+      alert("Settings Updated Successfully!");
   };
 
   const getUserInfo = (userId: string) => users.find(u => u.id === userId);
@@ -170,13 +204,18 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
 
   // --- Components ---
 
-  const SidebarItem = ({ id, icon: Icon, label }: any) => (
+  const SidebarItem = ({ id, icon: Icon, label, count }: any) => (
     <button 
         onClick={() => { setActiveTab(id); setMenuOpen(false); }} 
-        className={`w-full flex items-center gap-3 p-3.5 rounded-xl transition mb-1 font-medium text-sm ${activeTab === id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+        className={`w-full flex items-center justify-between p-3.5 rounded-xl transition mb-1 font-medium text-sm ${activeTab === id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
     >
-        <Icon size={18} strokeWidth={2.5}/> <span>{label}</span>
-        {activeTab === id && <ChevronRight size={16} className="ml-auto opacity-50"/>}
+        <div className="flex items-center gap-3">
+            <Icon size={18} strokeWidth={2.5}/> <span>{label}</span>
+        </div>
+        <div className="flex items-center gap-2">
+            {count > 0 && <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center shadow-sm">{count}</span>}
+            {activeTab === id && <ChevronRight size={16} className="opacity-50"/>}
+        </div>
     </button>
   );
 
@@ -252,7 +291,7 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
                              <span className="text-xs font-bold text-emerald-600">Live</span>
                           </div>
                       </div>
-                      <p className="text-xs text-emerald-600 mt-4">Version 2.5 Updated</p>
+                      <p className="text-xs text-emerald-600 mt-4">V3.0 Updated with Notification Fix</p>
                   </div>
               </div>
           </div>
@@ -664,10 +703,16 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
       );
   };
 
-  // --- 7. Global Settings (Added Promo & Dhamaka Offer) ---
+  // --- 7. Global Settings (Added Slider, Support & Fixed Links) ---
   const GlobalSettingsView = () => {
       const [localSet, setLocalSet] = useState(settings);
       
+      const handleSliderChange = (idx: number, val: string) => {
+          const newImages = [...(localSet.sliderImages || [])];
+          newImages[idx] = val;
+          setLocalSet({ ...localSet, sliderImages: newImages });
+      };
+
       return (
           <div className={CARD_STYLE}>
               <h3 className="font-bold text-xl mb-6 border-b pb-4">Global App Configuration</h3>
@@ -675,7 +720,27 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
                   <div className="space-y-4">
                       <h4 className="font-bold text-gray-700">General Information</h4>
                       <div><label className={LABEL_STYLE}>App Name</label><input className={INPUT_STYLE} value={localSet.appName} onChange={e => setLocalSet({...localSet, appName: e.target.value})}/></div>
-                      <div><label className={LABEL_STYLE}>Support Link (Telegram)</label><input className={INPUT_STYLE} value={localSet.supportLink} onChange={e => setLocalSet({...localSet, supportLink: e.target.value})}/></div>
+                  </div>
+                  
+                  {/* Slider Settings */}
+                  <div className="col-span-1 md:col-span-2 space-y-2 bg-gray-50 p-4 rounded-xl border">
+                      <h4 className="font-bold text-gray-700 mb-2 flex items-center gap-2"><ImageIcon size={16}/> Slider Images (User Footer)</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                          {[0, 1, 2, 3].map(i => (
+                              <div key={i}><input className={INPUT_STYLE} placeholder={`Image URL ${i+1}`} value={localSet.sliderImages?.[i] || ''} onChange={e => handleSliderChange(i, e.target.value)}/></div>
+                          ))}
+                      </div>
+                  </div>
+
+                  {/* Support Links */}
+                  <div className="col-span-1 md:col-span-2 space-y-2 bg-blue-50 p-4 rounded-xl border border-blue-100">
+                      <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Link size={16}/> Support & Social Links</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                          <div><label className={LABEL_STYLE}>Telegram Channel</label><input className={INPUT_STYLE} value={localSet.channelLink} onChange={e => setLocalSet({...localSet, channelLink: e.target.value})}/></div>
+                          <div><label className={LABEL_STYLE}>Telegram Group</label><input className={INPUT_STYLE} value={localSet.groupLink} onChange={e => setLocalSet({...localSet, groupLink: e.target.value})}/></div>
+                          <div><label className={LABEL_STYLE}>YouTube Channel</label><input className={INPUT_STYLE} value={localSet.youtubeLink} onChange={e => setLocalSet({...localSet, youtubeLink: e.target.value})}/></div>
+                          <div><label className={LABEL_STYLE}>Admin Support (Direct)</label><input className={INPUT_STYLE} value={localSet.supportLink} onChange={e => setLocalSet({...localSet, supportLink: e.target.value})}/></div>
+                      </div>
                   </div>
                   
                   <div className="space-y-4">
@@ -705,9 +770,10 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
       );
   };
 
-  // --- 8. Social Manager (Updated with Gmail Request Flow) ---
+  // --- 8. Social Manager (UPDATED: Nested Menu & Gmail Logic) ---
   const SocialManagerView = () => {
-      const [view, setView] = useState('gmail_request'); // Default to gmail request
+      const [view, setView] = useState('menu'); // menu | gmail | facebook | instagram | tiktok | settings
+      const [gmailTab, setGmailTab] = useState('pending'); // pending | recovery | working
       const [adminInput, setAdminInput] = useState({ firstName: '', lastName: '', adminEmail: '', adminPass: '', adminRecovery: '' });
 
       const handleGmailAction = async (trx: any, actionType: string) => {
@@ -716,10 +782,10 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
           
           if (actionType === 'send_creds') {
               newData = { ...adminInput };
-              newStatus = 'working'; // Step 2
+              newStatus = 'working'; // Step 2: User works
           } else if (actionType === 'send_recovery') {
               newData = { adminRecovery: adminInput.adminRecovery };
-              newStatus = 'finalizing'; // Step 4
+              newStatus = 'finalizing'; // Step 4: User sets recovery
           } else if (actionType === 'approve_final') {
               newStatus = 'approved';
               handleTransactionAction(trx.id, 'approved'); // Pay user
@@ -735,125 +801,201 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
           setAdminInput({ firstName: '', lastName: '', adminEmail: '', adminPass: '', adminRecovery: '' });
       };
 
-      const renderGmailRequests = () => {
-          const requests = trxs.filter(t => t.category === 'gmail_request' && t.status !== 'approved' && t.status !== 'rejected');
+      // --- Nested Components for Social Manager ---
+
+      const MenuGrid = () => (
+          <div className="grid grid-cols-2 gap-4">
+              <button onClick={() => { setView('gmail'); setGmailTab('pending'); }} className="p-6 bg-red-50 border border-red-100 rounded-xl hover:bg-red-100 transition flex flex-col items-center">
+                  <div className="bg-red-500 text-white p-3 rounded-full mb-2"><Mail size={24}/></div>
+                  <span className="font-bold text-red-700">Free Gmail Sell</span>
+                  <span className="text-xs text-red-500 mt-1">{counts.gmail} Requests</span>
+              </button>
+              <button onClick={() => setView('facebook')} className="p-6 bg-blue-50 border border-blue-100 rounded-xl hover:bg-blue-100 transition flex flex-col items-center">
+                  <div className="bg-blue-600 text-white p-3 rounded-full mb-2"><Facebook size={24}/></div>
+                  <span className="font-bold text-blue-700">Facebook Sell</span>
+              </button>
+              <button onClick={() => setView('instagram')} className="p-6 bg-pink-50 border border-pink-100 rounded-xl hover:bg-pink-100 transition flex flex-col items-center">
+                  <div className="bg-pink-600 text-white p-3 rounded-full mb-2"><Instagram size={24}/></div>
+                  <span className="font-bold text-pink-700">Instagram Sell</span>
+              </button>
+              <button onClick={() => setView('tiktok')} className="p-6 bg-black/5 border border-gray-200 rounded-xl hover:bg-gray-100 transition flex flex-col items-center">
+                  <div className="bg-black text-white p-3 rounded-full mb-2"><Video size={24}/></div>
+                  <span className="font-bold text-gray-800">TikTok Sell</span>
+              </button>
+              <button onClick={() => setView('settings')} className="col-span-2 p-4 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition font-bold text-gray-600 flex items-center justify-center gap-2">
+                  <Settings size={18}/> Manage Rates & Descriptions
+              </button>
+          </div>
+      );
+
+      const GmailDashboard = () => {
+          let filterStatus: string[] = [];
+          if (gmailTab === 'pending') filterStatus = ['pending_creds'];
+          if (gmailTab === 'recovery') filterStatus = ['pending_recovery'];
+          if (gmailTab === 'working') filterStatus = ['working', 'finalizing', 'review'];
+
+          const items = trxs.filter(t => t.category === 'gmail_request' && filterStatus.includes(t.status));
+
           return (
-              <div className="space-y-4">
-                  <h4 className="font-bold text-indigo-700">Manage Gmail Requests</h4>
-                  {requests.map(t => {
-                      const data = JSON.parse(t.details || '{}');
-                      return (
-                          <div key={t.id} className="border p-4 rounded-xl bg-gray-50 shadow-sm">
-                              <div className="flex justify-between mb-2">
-                                  <span className="font-bold text-sm">User: {t.userId}</span>
-                                  <span className="text-xs bg-yellow-200 px-2 py-1 rounded uppercase font-bold">{t.status}</span>
-                              </div>
+              <div>
+                  <div className="flex items-center gap-3 mb-4">
+                      <button onClick={() => setView('menu')} className="text-gray-500 hover:text-black"><ChevronRight className="rotate-180"/></button>
+                      <h3 className="font-bold text-lg">Gmail Management</h3>
+                  </div>
+                  <div className="flex gap-2 mb-4 bg-gray-50 p-1 rounded-lg">
+                      <button onClick={() => setGmailTab('pending')} className={`flex-1 py-2 text-xs font-bold rounded-md ${gmailTab === 'pending' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Pending Req</button>
+                      <button onClick={() => setGmailTab('recovery')} className={`flex-1 py-2 text-xs font-bold rounded-md ${gmailTab === 'recovery' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Recovery Req</button>
+                      <button onClick={() => setGmailTab('working')} className={`flex-1 py-2 text-xs font-bold rounded-md ${gmailTab === 'working' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Manage/Review</button>
+                  </div>
 
-                              {/* Step 1: Pending Creds */}
-                              {t.status === 'pending_creds' && (
-                                  <div className="grid grid-cols-2 gap-2 mt-2 bg-white p-3 rounded border">
-                                      <p className="col-span-2 text-xs text-gray-500 mb-1">Provide credentials for user to create account:</p>
-                                      <input placeholder="First Name" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, firstName: e.target.value})}/>
-                                      <input placeholder="Last Name" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, lastName: e.target.value})}/>
-                                      <input placeholder="Email" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, adminEmail: e.target.value})}/>
-                                      <input placeholder="Password" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, adminPass: e.target.value})}/>
-                                      <button onClick={() => handleGmailAction(t, 'send_creds')} className="col-span-2 bg-blue-600 text-white py-2 rounded text-xs font-bold mt-1">Send Credentials</button>
+                  <div className="space-y-4">
+                      {items.map(t => {
+                          const data = JSON.parse(t.details || '{}');
+                          return (
+                              <div key={t.id} className="border p-4 rounded-xl bg-white shadow-sm">
+                                  <div className="flex justify-between mb-2 border-b pb-2">
+                                      <span className="font-bold text-sm text-gray-800">User: {t.userId}</span>
+                                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold uppercase">{t.status.replace('_', ' ')}</span>
                                   </div>
-                              )}
 
-                              {/* Step 3: Pending Recovery */}
-                              {t.status === 'pending_recovery' && (
-                                  <div className="mt-2 bg-white p-3 rounded border">
-                                      <p className="text-xs text-red-500 mb-1 font-bold">User requested recovery email.</p>
-                                      <input placeholder="Recovery Email" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, adminRecovery: e.target.value})}/>
-                                      <button onClick={() => handleGmailAction(t, 'send_recovery')} className="w-full mt-2 bg-blue-600 text-white py-2 rounded text-xs font-bold">Send Recovery Email</button>
-                                  </div>
-                              )}
-
-                              {/* Step 5: Review */}
-                              {t.status === 'review' && (
-                                  <div className="mt-2 bg-white p-3 rounded border">
-                                      <p className="text-xs text-green-600 font-bold mb-2">User Completed Task. Review Info:</p>
-                                      <div className="text-xs bg-gray-50 p-2 border mb-2 font-mono break-all">
-                                          {t.details}
+                                  {/* Step 1: Send Creds */}
+                                  {t.status === 'pending_creds' && (
+                                      <div className="grid grid-cols-2 gap-2 mt-2 bg-gray-50 p-3 rounded border">
+                                          <p className="col-span-2 text-xs text-gray-500 mb-1">Provide credentials for user to create account:</p>
+                                          <input placeholder="First Name" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, firstName: e.target.value})}/>
+                                          <input placeholder="Last Name" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, lastName: e.target.value})}/>
+                                          <input placeholder="Email to Create" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, adminEmail: e.target.value})}/>
+                                          <input placeholder="Password" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, adminPass: e.target.value})}/>
+                                          <button onClick={() => handleGmailAction(t, 'send_creds')} className="col-span-2 bg-indigo-600 text-white py-2 rounded text-xs font-bold mt-1">Send Credentials</button>
                                       </div>
-                                      <button onClick={() => handleGmailAction(t, 'approve_final')} className="w-full bg-emerald-600 text-white py-2 rounded text-xs font-bold">Approve Payment (৳{t.amount})</button>
-                                  </div>
-                              )}
-                              
-                              {/* Working State */}
-                              {t.status === 'working' && <p className="text-xs text-gray-400 mt-2">User is currently working...</p>}
-                              {t.status === 'finalizing' && <p className="text-xs text-gray-400 mt-2">User is verifying recovery...</p>}
-                          </div>
-                      )
-                  })}
-                  {requests.length === 0 && <p className="text-gray-400 text-sm">No pending Gmail requests.</p>}
+                                  )}
+
+                                  {/* Step 3: Send Recovery */}
+                                  {t.status === 'pending_recovery' && (
+                                      <div className="mt-2 bg-red-50 p-3 rounded border border-red-100">
+                                          <p className="text-xs text-red-600 font-bold mb-1">User requested recovery email.</p>
+                                          <input placeholder="Recovery Email" className={INPUT_STYLE} onChange={e => setAdminInput({...adminInput, adminRecovery: e.target.value})}/>
+                                          <button onClick={() => handleGmailAction(t, 'send_recovery')} className="w-full mt-2 bg-blue-600 text-white py-2 rounded text-xs font-bold">Send Recovery Email</button>
+                                      </div>
+                                  )}
+
+                                  {/* Step 5: Review & Pay */}
+                                  {t.status === 'review' && (
+                                      <div className="mt-2 bg-emerald-50 p-3 rounded border border-emerald-100">
+                                          <p className="text-xs text-emerald-700 font-bold mb-2">User Completed Task. Review Info:</p>
+                                          <div className="text-xs bg-white p-2 border mb-2 font-mono break-all text-gray-600">
+                                              {t.details}
+                                          </div>
+                                          <button onClick={() => handleGmailAction(t, 'approve_final')} className="w-full bg-emerald-600 text-white py-2 rounded text-xs font-bold">Approve Payment (৳{t.amount})</button>
+                                      </div>
+                                  )}
+                                  
+                                  {/* Working Status */}
+                                  {(t.status === 'working' || t.status === 'finalizing') && <p className="text-xs text-gray-400 mt-2">User is currently working on this task.</p>}
+                              </div>
+                          )
+                      })}
+                      {items.length === 0 && <p className="text-gray-400 text-center py-10">No items in this category.</p>}
+                  </div>
               </div>
           );
       };
 
-      const renderSettings = () => (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {['gmail', 'facebook', 'instagram', 'tiktok'].map(platform => (
-                  <div key={platform} className="p-4 border rounded-xl bg-gray-50">
-                      <h4 className="font-bold capitalize text-gray-800 mb-3">{platform} Settings</h4>
-                      <div className="space-y-2">
-                          <div><label className={LABEL_STYLE}>Buying Rate (৳)</label>
-                              <input type="number" className={INPUT_STYLE} defaultValue={settings.socialRates?.[platform]} 
-                                  onChange={e => {
-                                      const newRates = { ...settings.socialRates, [platform]: parseFloat(e.target.value) };
-                                      setSettings({ ...settings, socialRates: newRates });
-                                  }}
-                              />
+      const GenericSocialList = ({ platform }: { platform: string }) => {
+          const items = trxs.filter(t => t.category === 'sell' && t.details?.toLowerCase().includes(platform) && t.status === 'pending');
+          return (
+              <div>
+                  <div className="flex items-center gap-3 mb-4">
+                      <button onClick={() => setView('menu')} className="text-gray-500 hover:text-black"><ChevronRight className="rotate-180"/></button>
+                      <h3 className="font-bold text-lg capitalize">{platform} Management</h3>
+                  </div>
+                  <div className="space-y-2">
+                      {items.map(t => (
+                          <div key={t.id} className="p-4 border rounded-xl flex justify-between items-center bg-white">
+                              <div>
+                                  <p className="text-sm font-bold text-gray-800 break-all">{t.details}</p>
+                                  <p className="text-xs text-gray-500">User: {t.userId} | ৳{t.amount}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                  <button onClick={() => handleTransactionAction(t.id, 'approved')} className="bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold">Approve</button>
+                                  <button onClick={() => handleTransactionAction(t.id, 'rejected')} className="bg-red-500 text-white px-3 py-1 rounded text-xs font-bold">Reject</button>
+                              </div>
                           </div>
-                          <div><label className={LABEL_STYLE}>Description / Rules</label>
-                              <textarea className={INPUT_STYLE} rows={2} defaultValue={settings.socialDesc?.[platform]} 
-                                  placeholder={`Enter rules for ${platform}...`}
-                                  onChange={e => {
-                                      const newDesc = { ...settings.socialDesc, [platform]: e.target.value };
-                                      setSettings({ ...settings, socialDesc: newDesc });
-                                  }}
-                              />
+                      ))}
+                      {items.length === 0 && <p className="text-gray-400 text-center">No pending requests.</p>}
+                  </div>
+              </div>
+          );
+      };
+
+      const SettingsView = () => (
+          <div>
+              <div className="flex items-center gap-3 mb-4">
+                  <button onClick={() => setView('menu')} className="text-gray-500 hover:text-black"><ChevronRight className="rotate-180"/></button>
+                  <h3 className="font-bold text-lg">Social Rates & Descriptions</h3>
+              </div>
+              <div className="grid grid-cols-1 gap-6">
+                  {['gmail', 'facebook', 'instagram', 'tiktok'].map(p => (
+                      <div key={p} className="p-4 border rounded-xl bg-gray-50">
+                          <h4 className="font-bold capitalize text-gray-800 mb-2">{p} Settings</h4>
+                          <div className="grid grid-cols-3 gap-3">
+                              <div className="col-span-1">
+                                  <label className={LABEL_STYLE}>Rate (৳)</label>
+                                  <input type="number" className={INPUT_STYLE} value={settings.socialRates?.[p]} 
+                                      onChange={e => setSettings({...settings, socialRates: {...settings.socialRates, [p]: parseFloat(e.target.value)}})} />
+                              </div>
+                              <div className="col-span-2">
+                                  <label className={LABEL_STYLE}>Instructions</label>
+                                  <input className={INPUT_STYLE} value={settings.socialDesc?.[p]} placeholder="Rules for user..."
+                                      onChange={e => setSettings({...settings, socialDesc: {...settings.socialDesc, [p]: e.target.value}})} />
+                              </div>
                           </div>
                       </div>
-                  </div>
-              ))}
-              <div className="col-span-1 md:col-span-2">
-                  <button onClick={() => saveSettings(settings)} className={BTN_PRIMARY}>Save All Social Settings</button>
+                  ))}
+                  <button onClick={() => saveSettings(settings)} className={BTN_PRIMARY}>Save Settings</button>
               </div>
           </div>
       );
 
       return (
           <div className={CARD_STYLE}>
-              <div className="flex gap-2 mb-6 border-b border-gray-100 pb-4 overflow-x-auto">
-                  <button onClick={() => setView('gmail_request')} className={`px-4 py-2 rounded-lg font-bold text-xs uppercase ${view === 'gmail_request' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>Gmail Requests</button>
-                  <button onClick={() => setView('settings')} className={`px-4 py-2 rounded-lg font-bold text-xs uppercase ${view === 'settings' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>Settings</button>
-              </div>
-              
-              {view === 'gmail_request' && renderGmailRequests()}
-              {view === 'settings' && renderSettings()}
+              {view === 'menu' && <MenuGrid />}
+              {view === 'gmail' && <GmailDashboard />}
+              {view === 'facebook' && <GenericSocialList platform="facebook" />}
+              {view === 'instagram' && <GenericSocialList platform="instagram" />}
+              {view === 'tiktok' && <GenericSocialList platform="tiktok" />}
+              {view === 'settings' && <SettingsView />}
           </div>
       );
   };
 
-  // --- 9. Notice Manager ---
+  // --- 9. Notice Manager (FIXED: Now updates Marquee & Promo) ---
   const NoticeManagerView = () => {
-      const [notice, setNotice] = useState({ title: '', desc: '', type: 'text' });
+      const [notice, setNotice] = useState({ title: '', desc: '' });
+      
+      const sendNotice = async () => {
+          if (!notice.desc) return alert("Message body required!");
+          // This updates the marquee text on user dashboard AND the promo notification
+          await saveSettings({ 
+              ...settings, 
+              marqueeText: `📢 ${notice.desc}`, // Updates scrolling text
+              promo: { ...settings.promo, title: notice.title, desc: notice.desc } // Updates notification page
+          });
+          setNotice({ title: '', desc: '' });
+          alert("Notice Sent! Dashboard marquee updated.");
+      };
+
       return (
           <div className={`${CARD_STYLE} max-w-xl`}>
-              <h3 className="font-bold text-lg mb-4">Broadcast Notification</h3>
+              <h3 className="font-bold text-lg mb-4">Broadcast System Notice</h3>
               <div className="space-y-4">
-                  <div><label className={LABEL_STYLE}>Notification Title</label><input className={INPUT_STYLE} onChange={e => setNotice({...notice, title: e.target.value})}/></div>
-                  <div><label className={LABEL_STYLE}>Message Body</label><textarea rows={4} className={INPUT_STYLE} onChange={e => setNotice({...notice, desc: e.target.value})}/></div>
-                  <div><label className={LABEL_STYLE}>Type</label>
-                      <select className={INPUT_STYLE} onChange={e => setNotice({...notice, type: e.target.value})}>
-                          <option value="text">Text Only</option>
-                          <option value="popup">Popup Alert</option>
-                      </select>
+                  <div className="bg-yellow-50 p-4 rounded-lg text-sm text-yellow-800 border border-yellow-200">
+                      <strong>Note:</strong> Sending this will update the scrolling text (Marquee) on the User Dashboard immediately.
                   </div>
-                  <button onClick={() => alert("Notice sent to all users!")} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2">
-                      <Send size={18}/> Send Broadcast
+                  <div><label className={LABEL_STYLE}>Notification Title (Optional)</label><input className={INPUT_STYLE} value={notice.title} onChange={e => setNotice({...notice, title: e.target.value})}/></div>
+                  <div><label className={LABEL_STYLE}>Message Body (Scrolling Text)</label><textarea rows={4} className={INPUT_STYLE} value={notice.desc} onChange={e => setNotice({...notice, desc: e.target.value})}/></div>
+                  <button onClick={sendNotice} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
+                      <Send size={18}/> Send Notice
                   </button>
               </div>
           </div>
@@ -986,27 +1128,28 @@ export const AdminPanel = ({ user, onLogout }: { user: UserData, onLogout: () =>
                 <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-xl">A</div>
                 <div>
                     <h2 className="font-bold text-lg leading-tight">Admin Panel</h2>
-                    <p className="text-[10px] text-gray-400">V2.5 Pro</p>
+                    <p className="text-[10px] text-gray-400">V3.0 Updated</p>
                 </div>
             </div>
             <button onClick={() => setMenuOpen(false)} className="md:hidden text-gray-400"><X /></button>
          </div>
          
          <nav className="p-4 space-y-1 flex-1 overflow-y-auto scrollbar-hide">
-            <SidebarItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
+            <SidebarItem id="dashboard" icon={LayoutDashboard} label="Dashboard" count={0} />
+            <div className="pt-4 pb-2 px-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Requests</div>
+            <SidebarItem id="deposit" icon={Wallet} label="Deposit Manager" count={counts.deposit} />
+            <SidebarItem id="deposit" icon={CreditCard} label="Withdrawals" count={counts.withdraw} />
+            <SidebarItem id="premium" icon={Crown} label="Premium Requests" count={counts.premium} />
+            <SidebarItem id="social" icon={SmartphoneNfc} label="Account Sales" count={counts.gmail + counts.social} />
+            <SidebarItem id="tasks" icon={ClipboardList} label="Task Proofs" count={counts.task} />
             <div className="pt-4 pb-2 px-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Management</div>
-            <SidebarItem id="deposit" icon={Wallet} label="Deposit Manager" />
-            <SidebarItem id="users" icon={Users} label="User Manager" />
-            <SidebarItem id="tasks" icon={ClipboardList} label="Task Manager" />
-            <SidebarItem id="typing" icon={Keyboard} label="Typing Jobs" />
-            <SidebarItem id="quiz" icon={HelpCircle} label="Quiz Manager" />
-            <SidebarItem id="social" icon={SmartphoneNfc} label="Account Sales" />
-            <div className="pt-4 pb-2 px-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Financial</div>
-            <SidebarItem id="premium" icon={Crown} label="Premium Manager" />
-            <SidebarItem id="salary" icon={DollarSign} label="Salary Plans" />
+            <SidebarItem id="users" icon={Users} label="User Manager" count={0} />
+            <SidebarItem id="typing" icon={Keyboard} label="Typing Jobs" count={0} />
+            <SidebarItem id="quiz" icon={HelpCircle} label="Quiz Manager" count={0} />
+            <SidebarItem id="salary" icon={DollarSign} label="Salary Plans" count={0} />
             <div className="pt-4 pb-2 px-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider">System</div>
-            <SidebarItem id="notice" icon={Bell} label="Send Notice" />
-            <SidebarItem id="global" icon={Settings} label="Global Settings" />
+            <SidebarItem id="notice" icon={Bell} label="Send Notice" count={0} />
+            <SidebarItem id="global" icon={Settings} label="Global Settings" count={0} />
          </nav>
 
          <div className="p-4 border-t border-gray-800">

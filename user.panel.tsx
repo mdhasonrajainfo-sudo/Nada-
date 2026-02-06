@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, Bell, Headphones, Home, Wallet, Users, User, LogOut, 
@@ -9,7 +11,7 @@ import {
   Ticket, ExternalLink, Loader2, CreditCard, Gift, Trophy, Globe,
   MessageCircle, LayoutGrid, Star, AlertTriangle, Play, XCircle,
   ShoppingBag, CheckSquare, Zap, Gift as GiftIcon, Clock, Calendar,
-  Map, Milestone
+  Map, Milestone, Info
 } from 'lucide-react';
 import { UserData, DB_KEYS } from './types';
 import { supabase } from './supabaseClient';
@@ -51,13 +53,11 @@ const getSettings = async () => {
         socialRates: { gmail: 10, facebook: 5, instagram: 5, tiktok: 5 },
         promo: { title: 'ধামাকা অফার ২০২৬ রমজানুল মোবারক', desc: 'এই অফারটি সীমিত সময়ের জন্য!', link: '' }
     };
-    // Supabase stores JSON in a 'value' column usually, or separate columns. Assuming 'value' JSON column here.
     return data ? { ...defaults, ...data.value } : defaults;
 };
 
 // Save Transaction to Supabase
 const saveTransaction = async (userId: string, trx: any) => {
-  // Remove ID if it exists in trx object because Supabase generates it
   const { id, ...trxData } = trx; 
   await supabase.from('transactions').insert([{ ...trxData, userId }]);
 };
@@ -68,7 +68,7 @@ const getUserStats = async (userId: string) => {
    if (!trxs) return { totalEarned: 0, totalWithdraw: 0, pendingWithdraw: 0 };
 
    return {
-      totalEarned: trxs.filter(t => t.type === 'earning' && t.status === 'approved').reduce((acc, curr) => acc + curr.amount, 0),
+      totalEarned: trxs.filter(t => (t.type === 'earning' || t.type === 'bonus') && t.status === 'approved').reduce((acc, curr) => acc + curr.amount, 0),
       totalWithdraw: trxs.filter(t => t.type === 'withdraw' && t.status !== 'rejected').reduce((acc, curr) => acc + curr.amount, 0),
       pendingWithdraw: trxs.filter(t => t.type === 'withdraw' && t.status === 'pending').reduce((acc, curr) => acc + curr.amount, 0),
    };
@@ -1201,14 +1201,25 @@ const WalletPage = ({ user, onBack, initialView = 'main', showPopup, onGoPremium
 // --- 7. Team Page ---
 const TeamPageImpl = ({ user, onBack }: any) => {
     const [level1, setLevel1] = useState<any[]>([]);
+    const [refIncome, setRefIncome] = useState<any>({});
     
     useEffect(() => {
         const fetchTeam = async () => {
             const { data } = await supabase.from('users').select('*').eq('uplineRefCode', user.refCode);
             if(data) setLevel1(data);
+
+            const { data: bonusTrxs } = await supabase.from('transactions').select('*').eq('userId', user.id).eq('category', 'referral').eq('type', 'bonus');
+            const incomes: any = {};
+            if (bonusTrxs && data) {
+                data.forEach((u: any) => {
+                   const earnedFromUser = bonusTrxs.filter((t: any) => t.details && t.details.includes(u.fullName)).reduce((sum, t) => sum + t.amount, 0);
+                   incomes[u.id] = earnedFromUser;
+                });
+                setRefIncome(incomes);
+            }
         };
         fetchTeam();
-    }, [user.refCode]);
+    }, [user.refCode, user.id]);
 
     const regLink = `${window.location.origin}?ref=${user.refCode}`;
     return (
@@ -1240,9 +1251,10 @@ const TeamPageImpl = ({ user, onBack }: any) => {
                                   <p className="text-xs text-gray-500">{u.phone}</p>
                               </div>
                               <div className="text-right">
-                                  <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${u.accountType === 'premium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                                  <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase block mb-1 ${u.accountType === 'premium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
                                       {u.accountType}
                                   </span>
+                                  <span className="text-xs font-bold text-emerald-600 block">Earning: ৳{refIncome[u.id] || 0}</span>
                               </div>
                           </div>
                       )) : <p className="p-4 text-center text-gray-400 text-sm">কোনো মেম্বার নেই।</p>}
@@ -1427,7 +1439,8 @@ const TeamPageImpl = ({ user, onBack }: any) => {
     }
 
     if (view === 'inc_hist') {
-        const incs = trxs.filter(t => t.type === 'earning');
+        // Updated to include 'bonus'
+        const incs = trxs.filter(t => t.type === 'earning' || t.type === 'bonus');
         return (
             <div className={PAGE_CONTAINER_STYLE}>
                 <Header title="ইনকাম হিস্টোরি" onBack={() => setProfileView('main')}/>
@@ -1440,6 +1453,7 @@ const TeamPageImpl = ({ user, onBack }: any) => {
                             </div>
                             <div className="text-right">
                                 <p className="font-bold text-emerald-600">+৳{t.amount}</p>
+                                <span className="text-[10px] text-gray-400 uppercase">{t.type}</span>
                             </div>
                         </div>
                     ))}
@@ -1541,16 +1555,100 @@ const WelcomeModal = ({ onClose }: { onClose: () => void }) => (
     </div>
 );
 
-const SupportPage = ({ onBack }: { onBack: () => void }) => (
-    <div className={PAGE_CONTAINER_STYLE}>
-        <Header title="Support" onBack={onBack} />
-        <div className="p-6 text-center text-gray-500 mt-10">
-            <Headphones size={48} className="mx-auto mb-4 text-gray-300"/>
-            <h3 className="text-lg font-bold text-gray-700 mb-2">Need Help?</h3>
-            <p className="text-sm">Contact us via Telegram for 24/7 support.</p>
+const NotificationPage = ({ user, onBack }: { user: UserData, onBack: () => void }) => {
+    const [notices, setNotices] = useState<any[]>([]);
+    
+    useEffect(() => {
+        const fetchNotices = async () => {
+            // Fetch relevant transactions like withdrawals, deposits, salary approved
+            const { data } = await supabase.from('transactions')
+                .select('*')
+                .eq('userId', user.id)
+                .in('status', ['approved', 'rejected'])
+                .order('date', {ascending: false})
+                .limit(20);
+            
+            // Also fetch settings for global promo
+            const { data: set } = await supabase.from('settings').select('*').single();
+            const promo = set?.value?.promo;
+
+            let allNotices = [];
+            
+            if(promo) {
+                allNotices.push({ id: 'promo', type: 'system', title: promo.title, desc: promo.desc, date: new Date().toISOString() });
+            }
+
+            if(data) {
+                const mapped = data.map((t: any) => ({
+                    id: t.id,
+                    type: t.status === 'approved' ? 'success' : 'error',
+                    title: t.status === 'approved' ? 'Transaction Approved' : 'Transaction Rejected',
+                    desc: `${t.type.toUpperCase()} request of ৳${t.amount} was ${t.status}.`,
+                    date: t.date
+                }));
+                allNotices = [...allNotices, ...mapped];
+            }
+            setNotices(allNotices);
+        };
+        fetchNotices();
+    }, [user.id]);
+
+    return (
+        <div className={PAGE_CONTAINER_STYLE}>
+            <Header title="Notifications" onBack={onBack}/>
+            <div className="p-4 space-y-3">
+                {notices.length === 0 ? <p className="text-center text-gray-400 mt-10">No notifications.</p> : notices.map((n) => (
+                    <div key={n.id} className={`p-4 rounded-xl border shadow-sm ${n.type === 'system' ? 'bg-purple-50 border-purple-100' : 'bg-white border-gray-100'}`}>
+                        <div className="flex gap-3">
+                            <div className={`mt-1 ${n.type === 'success' ? 'text-green-500' : n.type === 'error' ? 'text-red-500' : 'text-purple-500'}`}>
+                                {n.type === 'success' ? <CheckCircle size={20}/> : n.type === 'error' ? <XCircle size={20}/> : <Bell size={20}/>}
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-gray-800 text-sm">{n.title}</h4>
+                                <p className="text-xs text-gray-500 mt-1">{n.desc}</p>
+                                <p className="text-[10px] text-gray-400 mt-2">{new Date(n.date).toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
-    </div>
-);
+    )
+};
+
+const SupportPage = ({ onBack }: { onBack: () => void }) => {
+    const [settings, setSettings] = useState<any>({});
+    useEffect(() => { getSettings().then(setSettings); }, []);
+
+    return (
+        <div className={PAGE_CONTAINER_STYLE}>
+            <Header title="সাপোর্ট সেন্টার" onBack={onBack} />
+            <div className="p-4 space-y-4">
+                 <button onClick={() => window.open(settings.supportLink || 'https://t.me/channel')} className="w-full flex items-center gap-4 bg-blue-50 p-4 rounded-xl border border-blue-100 hover:bg-blue-100 transition shadow-sm">
+                     <div className="bg-blue-500 p-3 rounded-full text-white"><Send size={24}/></div>
+                     <div className="text-left">
+                         <h4 className="font-bold text-gray-800">Telegram Channel</h4>
+                         <p className="text-xs text-gray-500">অফিসিয়াল আপডেট পেতে</p>
+                     </div>
+                 </button>
+                 <button onClick={() => window.open('https://t.me/group')} className="w-full flex items-center gap-4 bg-indigo-50 p-4 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition shadow-sm">
+                     <div className="bg-indigo-500 p-3 rounded-full text-white"><Users size={24}/></div>
+                     <div className="text-left">
+                         <h4 className="font-bold text-gray-800">Telegram Group</h4>
+                         <p className="text-xs text-gray-500">অন্যদের সাথে চ্যাট করুন</p>
+                     </div>
+                 </button>
+                 <button onClick={() => window.open(settings.supportLink)} className="w-full flex items-center gap-4 bg-red-50 p-4 rounded-xl border border-red-100 hover:bg-red-100 transition shadow-sm">
+                     <div className="bg-red-500 p-3 rounded-full text-white"><Headphones size={24}/></div>
+                     <div className="text-left">
+                         <h4 className="font-bold text-gray-800">Admin Contact</h4>
+                         <p className="text-xs text-gray-500">সরাসরি কথা বলুন</p>
+                     </div>
+                 </button>
+            </div>
+        </div>
+    );
+};
 
 const DhamakaPage = ({ onBack }: { onBack: () => void }) => (
     <div className={PAGE_CONTAINER_STYLE}>
@@ -1587,6 +1685,21 @@ export const UserPanel = ({ user, onLogout, onUpdateUser }: any) => {
 
     // Dashboard Internal Component to access state
     const Dashboard = () => {
+        const [pendingPremium, setPendingPremium] = useState<any>(null);
+
+        useEffect(() => {
+            const checkPending = async () => {
+                const { data } = await supabase.from('transactions')
+                    .select('*')
+                    .eq('userId', user.id)
+                    .eq('type', 'purchase')
+                    .eq('status', 'pending')
+                    .maybeSingle();
+                setPendingPremium(data);
+            };
+            checkPending();
+        }, []);
+
         const HomeButton = ({ icon: Icon, title, onClick, color }: any) => (
             <button onClick={onClick} className="flex flex-col items-center justify-center p-1 active:scale-95 transition w-full group">
               <div className={`p-3 rounded-2xl mb-2 ${color} bg-opacity-10 shadow-sm border border-gray-50 w-14 h-14 flex items-center justify-center`}>
@@ -1609,7 +1722,7 @@ export const UserPanel = ({ user, onLogout, onUpdateUser }: any) => {
                  </div>
                  <div className="flex gap-3 text-gray-600">
                     <button onClick={() => setShowSupport(true)} className="hover:bg-gray-100 p-1 rounded-full"><Headphones size={22} className="text-emerald-600" /></button>
-                    <Bell size={22} className="cursor-pointer hover:text-emerald-600 transition" />
+                    <button onClick={() => setCurrentView('notifications')} className="hover:bg-gray-100 p-1 rounded-full"><Bell size={22} className="cursor-pointer hover:text-emerald-600 transition" /></button>
                  </div>
               </div>
 
@@ -1669,18 +1782,29 @@ export const UserPanel = ({ user, onLogout, onUpdateUser }: any) => {
                   </div>
               </div>
 
-              {/* Premium CTA */}
-              <div className="px-4 py-2 mt-2">
-                  <button onClick={() => setCurrentView('premium')} className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 p-0.5 rounded-xl shadow-md active:scale-95 transition group">
-                     <div className="bg-white/95 backdrop-blur rounded-[10px] p-3 flex items-center justify-between group-hover:bg-white/90 transition">
-                        <div className="flex items-center gap-3">
-                           <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600"><Crown size={24} className="fill-yellow-600"/></div>
-                           <div className="text-left"><h3 className="font-bold text-gray-800 text-sm">একাউন্ট প্রিমিয়াম করুন</h3><p className="text-[10px] text-gray-500">প্যাকেজ কিনুন এবং দ্বিগুণ ইনকাম করুন</p></div>
-                        </div>
-                        <ChevronRight size={18} className="text-gray-400"/>
-                     </div>
-                  </button>
-              </div>
+              {/* Premium CTA / Pending State */}
+              {user.accountType === 'free' && (
+                  <div className="px-4 py-2 mt-2">
+                      {pendingPremium ? (
+                          <div className="w-full bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm text-center">
+                              <Info size={32} className="mx-auto text-amber-500 mb-2 animate-pulse"/>
+                              <h3 className="font-bold text-amber-800 text-sm">Activation Pending</h3>
+                              <p className="text-[10px] text-amber-600 mt-1">আপনার প্রিমিয়াম রিকোয়েস্ট টি অ্যাডমিন চেক করছে।</p>
+                              <p className="text-[10px] font-mono font-bold bg-white inline-block px-2 py-1 mt-2 rounded border border-amber-100 text-gray-500">Trx: {pendingPremium.trxId}</p>
+                          </div>
+                      ) : (
+                          <button onClick={() => setCurrentView('premium')} className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 p-0.5 rounded-xl shadow-md active:scale-95 transition group">
+                             <div className="bg-white/95 backdrop-blur rounded-[10px] p-3 flex items-center justify-between group-hover:bg-white/90 transition">
+                                <div className="flex items-center gap-3">
+                                   <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600"><Crown size={24} className="fill-yellow-600"/></div>
+                                   <div className="text-left"><h3 className="font-bold text-gray-800 text-sm">একাউন্ট প্রিমিয়াম করুন</h3><p className="text-[10px] text-gray-500">প্যাকেজ কিনুন এবং দ্বিগুণ ইনকাম করুন</p></div>
+                                </div>
+                                <ChevronRight size={18} className="text-gray-400"/>
+                             </div>
+                          </button>
+                      )}
+                  </div>
+              )}
 
               {/* Grid */}
               <div className="px-4 py-2">
@@ -1698,7 +1822,7 @@ export const UserPanel = ({ user, onLogout, onUpdateUser }: any) => {
                  </div>
               </div>
               
-              {/* Auto Slider */}
+              {/* Auto Slider - Below 8 buttons */}
               <div className="px-4 mt-2">
                   <AutoSlider images={settings.sliderImages} />
               </div>
@@ -1729,6 +1853,7 @@ export const UserPanel = ({ user, onLogout, onUpdateUser }: any) => {
             case 'team': return <TeamPageImpl user={user} onBack={() => setCurrentView('dashboard')} />;
             case 'premium': return <PremiumPage user={user} onBack={() => setCurrentView('dashboard')} showPopup={showPopup} />;
             case 'profile': return <ProfilePage user={user} onBack={() => setCurrentView('dashboard')} onLogout={onLogout} onUpdateUser={onUpdateUser} showPopup={showPopup} />;
+            case 'notifications': return <NotificationPage user={user} onBack={() => setCurrentView('dashboard')} />;
             case 'support': return <SupportPage onBack={() => setCurrentView('dashboard')} />;
             case 'dhamaka': return <DhamakaPage onBack={() => setCurrentView('dashboard')} />;
             default: return <Dashboard />;
